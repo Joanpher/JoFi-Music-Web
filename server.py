@@ -172,21 +172,35 @@ def search_music(q):
     return cached('search', f'search:{q.lower()}', fn)
 
 
+# Clientes de yt-dlp en orden de preferencia. android_music es el cliente
+# específico de YouTube Music: devuelve más formatos de audio y suele sortear
+# los bloqueos de "Sign in to confirm you're not a bot" que sufren las IPs
+# de centros de datos (como las de Vercel) con el cliente web.
+_MOBILE_UA = ('Mozilla/5.0 (Linux; Android 13; Pixel 7) AppleWebKit/537.36 '
+              '(KHTML, like Gecko) Chrome/120.0.0.0 Mobile Safari/537.36')
+
+_MCLIENT_ORDER = ['android_music', 'android_vr', 'mweb']
+
+
+def _private_empty_url(info):
+    """El extractor de YouTube a veces guarda el stream en un campo privado."""
+    if not info:
+        return ''
+    return (info.get('_url') or '').replace('\u00a0\u00a0', '')
+
 _ydl_opts = {
-    # El cliente web requiere cada vez más comprobaciones (PO Token/EJS) y
-    # suele ser bloqueado desde IPs de centros de datos como las de Vercel.
-    # android_vr mantiene formatos HTTPS reproducibles sin esos tokens.
-    'format': 'bestaudio[ext=m4a]/18/bestaudio/best',
+    'format': 'bestaudio[ext=m4a]/251/bestaudio/best',
     'quiet': True,
     'no_warnings': True,
     'skip_download': True,
     'noplaylist': True,
     'source_address': '0.0.0.0',
-    'socket_timeout': 20,
+    'socket_timeout': 30,
     'retries': 2,
+    'http_headers': {'User-Agent': _MOBILE_UA},
     'extractor_args': {
         'youtube': {
-            'player_client': ['android_vr'],
+            'player_client': ['android_music', 'android_vr', 'mweb'],
         },
     },
 }
@@ -195,12 +209,27 @@ _ydl_opts = {
 def stream_url(video_id, refresh=False):
     def fn():
         with _lock:
-            with yt_dlp.YoutubeDL(_ydl_opts) as ydl:
-                info = ydl.extract_info(f'https://music.youtube.com/watch?v={video_id}', download=False)
-            url = info.get('url')
-            if not url:
-                raise RuntimeError('yt-dlp no devolvió url de audio')
-            return url
+            last_err = None
+            errors = []
+            for client in _MCLIENT_ORDER:
+                opts = dict(_ydl_opts)
+                opts['extractor_args'] = {
+                    'youtube': {'player_client': [client]},
+                }
+                try:
+                    with yt_dlp.YoutubeDL(opts) as ydl:
+                        info = ydl.extract_info(
+                            f'https://music.youtube.com/watch?v={video_id}',
+                            download=False)
+                    url = (info or {}).get('url') or _private_empty_url(info)
+                    if url:
+                        return url
+                    last_err = RuntimeError('yt-dlp no devolvió url de audio')
+                except Exception as e:
+                    last_err = e
+                    errors.append(f'{client}: {str(e).splitlines()[0][:120]}')
+            raise RuntimeError(('No se pudo extraer el audio: ' + ' | '.join(errors))
+                               if errors else str(last_err))
     if refresh:
         cache_del('url', f'url:{video_id}')
     try:
@@ -467,7 +496,7 @@ class Handler(BaseHTTPRequestHandler):
 
     def _proxy_audio(self, url):
         req = urllib.request.Request(url, headers={
-            'User-Agent': 'Mozilla/5.0',
+            'User-Agent': _MOBILE_UA,
             'Range': self.headers.get('Range') or 'bytes=0-',
         })
         try:
