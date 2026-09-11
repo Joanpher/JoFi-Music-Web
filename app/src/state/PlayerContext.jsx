@@ -4,7 +4,7 @@ import React, {
 import * as api from '../services/api'
 import { logger } from '../services/logger'
 import {
-  initMediaSession, updateMediaSession, clearMediaSession
+  initMediaSession, updateMediaSession, clearMediaSession, updatePosition
 } from '../services/mediaSession'
 import { countryInfo, RANDOM_POOL } from '../lib/constants'
 import { thumbFor } from '../lib/format'
@@ -13,6 +13,7 @@ const Ctx = createContext(null)
 export const usePlayer = () => useContext(Ctx)
 
 const FAV_KEY = 'playtube.favs.v1'
+const SESSION_KEY = 'playtube.session.v1'
 const pick = (pool) => pool[Math.floor(Math.random() * pool.length)]
 
 function loadFavs() {
@@ -23,19 +24,37 @@ function loadFavs() {
   return []
 }
 
+/* Estado de reproducción guardado → permite seguir escuchando
+   después de recargar la página (a partir de donde quedó). */
+function loadSession() {
+  try {
+    const raw = localStorage.getItem(SESSION_KEY)
+    if (!raw) return null
+    const s = JSON.parse(raw)
+    if (!s || !Array.isArray(s.queue) || s.current < 0 || s.current >= s.queue.length) return null
+    if (!s.queue[s.current]) return null
+    return s
+  } catch { /* sin sesión previa */ }
+  return null
+}
+
+const initialSession = loadSession()
+let RESUME_DONE = false
+
 const initialState = {
   screen: 'list',          // 'list' = shell con tabs · 'player' = overlay Now Playing
-  tab: 'inicio',           // 'inicio' | 'buscar' | 'biblioteca'
-  cc: 'do',
-  listTitle: 'Top República Dominicana',
-  queue: [],
-  current: -1,
+  tab: initialSession?.tab || 'inicio',   // 'inicio' | 'buscar' | 'biblioteca' | 'lista'
+  cc: initialSession?.cc || 'do',
+  listTitle: initialSession?.listTitle || 'Top República Dominicana',
+  queue: initialSession?.queue || [],
+  current: initialSession ? initialSession.current : -1,
   playing: false,
-  shuffle: false,
-  repeat: 'off',           // 'off' | 'all' | 'one'
-  volume: 80,
-  muted: false,
+  shuffle: initialSession?.shuffle ?? false,
+  repeat: initialSession?.repeat || 'off',   // 'off' | 'all' | 'one'
+  volume: initialSession?.volume ?? 80,
+  muted: initialSession?.muted ?? false,
   busy: null,
+  lyrics: null,
   favs: loadFavs()
 }
 
@@ -55,6 +74,9 @@ function reducer(s, a) {
     case 'VOLUME': return { ...s, volume: a.v, muted: false }
     case 'MUTE': return { ...s, muted: !s.muted }
     case 'BUSY': return { ...s, busy: a.text }
+    case 'LYRICS': return a.p
+      ? { ...s, lyrics: { songId: a.songId, song: a.song, busy: !!a.busy, timed: !!a.timed, plain: a.plain || null, lines: a.lines || [], follow: !!a.follow } }
+      : { ...s, lyrics: null }
     case 'SET_FAVS': return { ...s, favs: a.favs }
     default: return s
   }
@@ -69,8 +91,57 @@ export function PlayerProvider({ children }) {
   const audioRef = useRef(null)
   const streamCache = useRef(new Map())
   const proxyUsed = useRef(new Set())
+  const positionMap = useRef(new Map())
   const stateRef = useRef(state)
   stateRef.current = state
+
+  /* ---------- persistencia de la sesión (recargar no corta la música) ---------- */
+  const persistTimer = useRef(0)
+  const persistNow = useCallback(() => {
+    const a = audioRef.current
+    const st = stateRef.current
+    const song = st.current >= 0 ? st.queue[st.current] : null
+    try {
+      localStorage.setItem(SESSION_KEY, JSON.stringify({
+        stamp: Date.now(),
+        tab: st.tab,
+        cc: st.cc,
+        listTitle: st.listTitle,
+        queue: st.queue,
+        current: st.current,
+        playing: st.playing,
+        currentTime: a ? (a.currentTime || 0) : 0,
+        duration: a && a.duration ? a.duration : (song ? song.duration || 0 : 0),
+        streamUrl: song && song.ytmId ? (streamCache.current.get(song.ytmId) || null) : null,
+        shuffle: st.shuffle,
+        repeat: st.repeat,
+        volume: st.volume,
+        muted: st.muted
+      }))
+    } catch { /* almacenamiento lleno / bloqueado */ }
+  }, [])
+
+  const persistThrottled = useCallback(() => {
+    clearTimeout(persistTimer.current)
+    persistTimer.current = setTimeout(persistNow, 2500)
+  }, [persistNow])
+
+  /* guarda también al ocultar/cerrar la pestaña (momento exacto) */
+  useEffect(() => {
+    const onHide = () => {
+      if (document.visibilityState === 'hidden') persistNow()
+    }
+    window.addEventListener('pagehide', persistNow)
+    document.addEventListener('visibilitychange', onHide)
+    return () => {
+      window.removeEventListener('pagehide', persistNow)
+      document.removeEventListener('visibilitychange', onHide)
+    }
+  }, [persistNow])
+
+  useEffect(() => {
+    persistThrottled()
+  }, [state.tab, state.cc, state.listTitle, state.playing, state.queue, persistThrottled])
 
   useEffect(() => {
     try {
@@ -114,13 +185,40 @@ export function PlayerProvider({ children }) {
     a.volume = stateRef.current.volume / 100
     audioRef.current = a
 
-    const onTime = () => setTick({ current: a.currentTime || 0, duration: a.duration || 0 })
+    const onTime = () => {
+      setTick({ current: a.currentTime || 0, duration: a.duration || 0 })
+      updatePosition({ current: a.currentTime || 0, duration: a.duration || 0 })
+      const s = currentSong()
+      if (s && s.ytmId) positionMap.current.set(s.ytmId, a.currentTime || 0)
+      persistThrottled()
+    }
     const onPlay = () => {
       dispatch({ type: 'SET_PLAYING', v: true })
       const s = currentSong()
-      if (s) updateMediaSession({ ...s, thumb: thumbFor(s.thumb, 512) }, a.duration || s.duration || 0, true)
+      if (s) {
+        updateMediaSession(
+          { ...s, thumb: thumbFor(s.thumb, 512) },
+          a.duration || s.duration || 0,
+          true,
+          a.currentTime || 0
+        )
+      }
+      persistThrottled()
     }
-    const onPause = () => dispatch({ type: 'SET_PLAYING', v: false })
+    const onPause = () => {
+      dispatch({ type: 'SET_PLAYING', v: false })
+      const s = currentSong()
+      if (s && s.ytmId) positionMap.current.set(s.ytmId, a.currentTime || 0)
+      if (s) {
+        updateMediaSession(
+          { ...s, thumb: thumbFor(s.thumb, 512) },
+          a.duration || s.duration || 0,
+          false,
+          a.currentTime || 0
+        )
+      }
+      persistNow()
+    }
 
     a.addEventListener('timeupdate', onTime)
     a.addEventListener('play', onPlay)
@@ -133,14 +231,117 @@ export function PlayerProvider({ children }) {
       a.removeEventListener('pause', onPause)
       clearMediaSession()
     }
-  }, [currentSong])
+  }, [currentSong, persistNow, persistThrottled])
+
+  const resumeTapRef = useRef(false)
+
+  /* ---------- reanudar tras recargar la página ---------- */
+  useEffect(() => {
+    if (RESUME_DONE || !initialSession || !initialSession.playing || initialSession.current < 0) return
+    const st = stateRef.current
+    const song = st.queue[st.current]
+    if (!song || !song.ytmId) return
+    RESUME_DONE = true
+    let alive = true
+    dispatch({ type: 'BUSY', text: 'Reanudando…' })
+    ;(async () => {
+      try {
+        let url = initialSession.streamUrl || streamCache.current.get(song.ytmId) || null
+        if (!url) {
+          const d = await api.resolveSong(song.ytmId)
+          url = d.url
+        }
+        if (!alive) return
+        streamCache.current.set(song.ytmId, url)
+        const a = audioRef.current
+        if (!a) return
+        const setPos = () => {
+          try {
+            const dur = a.duration && Number.isFinite(a.duration) ? a.duration : initialSession.duration || 0
+            const maxPos = Math.max(0, dur - 1)
+            a.currentTime = Math.min(initialSession.currentTime || 0, maxPos)
+          } catch { /* seeking aún no disponible */ }
+          a.removeEventListener('loadedmetadata', setPos)
+        }
+        a.addEventListener('loadedmetadata', setPos)
+        a.src = url
+        try {
+          await a.play()
+          dispatch({ type: 'SET_PLAYING', v: true })
+        } catch {
+          dispatch({ type: 'SET_PLAYING', v: false })
+          toast('Toca reproducir para continuar la canción')
+          resumeTapRef.current = true
+        }
+        persistNow()
+      } catch (e) {
+        logger.error('no se pudo reanudar la reproducción', e)
+      } finally {
+        if (alive) dispatch({ type: 'BUSY', text: null })
+      }
+    })()
+    return () => { alive = false }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [toast, persistNow])
+
+  /* si el autoplay bloqueó la reanudación, continuarla al primer toque */
+  useEffect(() => {
+    const tryResume = () => {
+      if (!resumeTapRef.current) return
+      resumeTapRef.current = false
+      const a = audioRef.current
+      if (!a || !a.paused) return
+      a.play().catch(() => {})
+    }
+    window.addEventListener('pointerdown', tryResume)
+    window.addEventListener('touchend', tryResume)
+    return () => {
+      window.removeEventListener('pointerdown', tryResume)
+      window.removeEventListener('touchend', tryResume)
+    }
+  }, [])
 
   const playIndex = useCallback(async (index, opts = {}, qOverride = null) => {
     const q = qOverride || stateRef.current.queue
     if (!q[index]) return
+    const song = q[index]
+    const cur = currentSong()
+
+    /* Misma canción → NO reiniciar: continuar donde iba */
+    if (song && song.ytmId && cur && cur.ytmId === song.ytmId) {
+      dispatch({ type: 'SET_CURRENT', i: index })
+      if (opts.screen !== false) dispatch({ type: 'SCREEN', s: 'player' })
+      const a = audioRef.current
+      if (!a) return
+      if (a.src) {
+        if (a.paused) a.play().catch(() => dispatch({ type: 'SET_PLAYING', v: false }))
+        return
+      }
+      dispatch({ type: 'BUSY', text: 'Reanudando…' })
+      try {
+        const d = await api.resolveSong(song.ytmId)
+        streamCache.current.set(song.ytmId, d.url)
+        const setPos = () => {
+          try {
+            const saved = positionMap.current.get(song.ytmId) || initialSession.currentTime || 0
+            const maxPos = Math.max(0, (a.duration || 0) - 1)
+            a.currentTime = Math.min(saved, maxPos)
+          } catch { /* seeking aún no disponible */ }
+          a.removeEventListener('loadedmetadata', setPos)
+        }
+        a.addEventListener('loadedmetadata', setPos)
+        a.src = d.url
+        a.play().catch(() => dispatch({ type: 'SET_PLAYING', v: false }))
+      } catch (e) {
+        logger.error('no se pudo reanudar la canción', e)
+      } finally {
+        dispatch({ type: 'BUSY', text: null })
+      }
+      return
+    }
+
     dispatch({ type: 'SET_CURRENT', i: index })
     if (opts.screen !== false) dispatch({ type: 'SCREEN', s: 'player' })
-    const song = q[index]
 
     let url = song.ytmId ? streamCache.current.get(song.ytmId) : ''
     if (!url) {
@@ -212,10 +413,17 @@ export function PlayerProvider({ children }) {
     if (!a) return
     a.currentTime = Math.max(0, t)
     setTick({ current: a.currentTime, duration: a.duration || 0 })
-  }, [])
-  const seekBy = useCallback((delta) => {
+    updatePosition({ current: a.currentTime, duration: a.duration || 0 })
+    persistNow()
+  }, [persistNow])
+  const seekBy = useCallback((delta, seekOffset) => {
     const a = audioRef.current
-    if (!a || !a.duration) return
+    if (!a) return
+    if (typeof seekOffset === 'number') {
+      seekTo(seekOffset)
+      return
+    }
+    if (!a.duration) return
     seekTo(a.currentTime + delta)
   }, [seekTo])
 
@@ -361,19 +569,67 @@ export function PlayerProvider({ children }) {
   }, [toast])
 
   /* ---------- letras ---------- */
-  const openLyrics = useCallback(async (song) => {
+  const lyricsCache = useRef(new Map())
+
+  const applyLyrics = useCallback((payload, song, id, follow) => {
+    if (stateRef.current.lyrics?.songId !== id) return
+    dispatch({
+      type: 'LYRICS', p: true, songId: id, song, follow,
+      lines: payload.lines, plain: payload.plain || '', timed: payload.timed
+    })
+  }, [])
+
+  const openLyrics = useCallback(async (song, opts = {}) => {
     if (!song) return
-    dispatch({ type: 'BUSY', text: 'Buscando letras…' })
-    let text = null
-    if (song.ytmId) text = await api.backendLyrics(song.ytmId)
-    if (!text) text = await api.ovhLyrics(song.artist, song.title)
-    dispatch({ type: 'BUSY', text: null })
-    if (text) {
-      showDialog(`Letras · ${song.title}`, text, [{ label: 'Cerrar' }], { lyrics: true })
-    } else {
-      toast(`Letras no encontradas para "${song.title}"`, { error: true })
+    const id = song.ytmId || song.videoId || 'x'
+    const follow = !!currentSong() && currentSong().ytmId === id
+    const cachedLy = lyricsCache.current.get(id)
+    if (cachedLy) {
+      dispatch({
+        type: 'LYRICS', p: true, songId: id, song, follow,
+        lines: cachedLy.lines, plain: cachedLy.plain || '', timed: cachedLy.timed
+      })
+      return
     }
-  }, [showDialog, toast])
+    dispatch({ type: 'LYRICS', p: true, songId: id, song, follow, busy: true })
+    try {
+      let payload = null
+      const timed = await api.timedLyrics(song)
+      if (timed && timed.lines && timed.lines.length) {
+        payload = { lines: timed.lines, plain: timed.plain || '', timed: true }
+      } else {
+        const text = (await api.backendLyrics(id)) || (await api.ovhLyrics(song.artist, song.title))
+        const lines = text
+          ? text.split('\n').map((l) => ({ text: l.replace(/\s+/g, ' ').trim() })).filter((l) => l.text)
+          : []
+        payload = { lines, plain: text || '', timed: false }
+      }
+      lyricsCache.current.set(id, payload)
+      applyLyrics(payload, song, id, follow)
+    } catch (e) {
+      logger.error('no se pudieron cargar las letras', e)
+      lyricsCache.current.set(id, { lines: [], plain: '', timed: false })
+      applyLyrics({ lines: [], plain: '', timed: false }, song, id, follow)
+    }
+  }, [applyLyrics, currentSong])
+
+  const closeLyrics = useCallback(() => dispatch({ type: 'LYRICS', p: false }), [])
+
+  /* si las letras están abiertas siguiendo la canción actual y ésta cambia, seguirlas */
+  useEffect(() => {
+    const ly = state.lyrics
+    if (!ly || !ly.follow) return
+    const cur = currentSong()
+    if (!cur || !cur.ytmId || cur.ytmId === ly.songId) return
+    openLyrics(cur)
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [state.lyrics, state.current])
+
+  const getPlaybackPosition = useCallback(() => {
+    const a = audioRef.current
+    return a ? a.currentTime * 1000 : 0
+  }, [])
+  const seekMs = useCallback((ms) => seekTo(ms / 1000), [seekTo])
 
   const controls = {
     togglePlay,
@@ -402,6 +658,10 @@ export function PlayerProvider({ children }) {
     toasts,
     dialog,
     favs: state.favs,
+    restored: !!initialSession,
+    lyrics: state.lyrics,
+    getPlaybackPosition,
+    seekMs,
     showDialog,
     closeDialog,
     toast,
@@ -415,9 +675,10 @@ export function PlayerProvider({ children }) {
       searchList,
       randomList,
       openFavorites,
-playIndex,
+      playIndex,
       playSongs,
       openLyrics,
+      closeLyrics,
       back: () => dispatch({ type: 'SCREEN', s: 'list' }),
       openPlayer: () => dispatch({ type: 'SCREEN', s: 'player' }),
       setTab: (t) => dispatch({ type: 'TAB', t }),

@@ -3,21 +3,26 @@ import { COUNTRIES } from '../lib/constants'
 import { formatDuration, thumbFor } from '../lib/format'
 import { IconGlobe, IconHeartFill, IconMic, IconMusic, IconShuffle } from './icons'
 
-function FavCard({ song, index }) {
+function FavCard({ song, index, list }) {
   const { state, actions } = usePlayer()
-  const active = state.current === index
+  const active = state.queue === list && state.current === index
   const playing = active && state.playing
+
+  const open = () => {
+    if (active) actions.openPlayer()
+    else actions.playSongs(list, index, 'Tus favoritas')
+  }
 
   return (
     <div
       className={`card ${active ? 'active' : ''}`}
-      onClick={() => (active ? actions.openPlayer() : actions.playIndex(index))}
+      onClick={open}
       role="button"
       tabIndex={0}
       onKeyDown={(e) => {
         if (e.key === 'Enter' || e.key === ' ') {
           e.preventDefault()
-          actions.playIndex(index)
+          open()
         }
       }}
     >
@@ -60,7 +65,7 @@ export default function LibraryScreen() {
         <h3><IconHeartFill className="h3-icon" width={17} height={17} />Canciones que te gustan</h3>
         {favs.length ? (
           <div className="card-list">
-            {favs.map((s, i) => <FavCard key={s.ytmId || i} song={s} index={i} />)}
+            {favs.map((s, i) => <FavCard key={s.ytmId || i} song={s} index={i} list={favs} />)}
           </div>
         ) : (
           <p className="lib-empty">

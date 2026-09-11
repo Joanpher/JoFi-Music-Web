@@ -1,6 +1,8 @@
 # Entorno
 node_modules/
 app/node_modules/
+__pycache__/
+*.py[cod]
 
 # Build
 app/dist/

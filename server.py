@@ -29,7 +29,7 @@ LOG_DIR = ROOT / 'logs'
 PORT = int(ROOT.joinpath('.port').read_text().strip()) if ROOT.joinpath('.port').exists() else 8000
 DB_PATH = ROOT / 'playtube_cache.db'
 
-TTL = {'charts': 3600, 'search': 3600, 'url': 3 * 3600, 'lyrics': 24 * 3600}
+TTL = {'charts': 3600, 'search': 3600, 'url': 3 * 3600, 'lyrics': 24 * 3600, 'lyrics_timed': 24 * 3600}
 
 _mem = {}
 _lock = threading.Lock()
@@ -205,6 +205,64 @@ def get_lyrics(video_id):
     return val or None
 
 
+LRC_RE = re.compile(r'\[(\d+):(\d+)(?:([.:,])(\d{1,3}))?\]')
+
+
+def parse_lrc(text):
+    """Convierte una letra LRC en líneas con tiempos (milisegundos)."""
+    lines = []
+    for raw in text.splitlines():
+        markers = []
+        for m in LRC_RE.finditer(raw):
+            mins, secs = int(m.group(1)), int(m.group(2))
+            frac = m.group(4)
+            ms = int(frac) * (1000 // 10 ** len(frac)) if frac else 0
+            markers.append(mins * 60000 + secs * 1000 + ms)
+        if not markers:
+            continue
+        payload = LRC_RE.sub('', raw).strip()
+        for ms in markers:
+            lines.append((ms, payload))
+    lines = [(ms, t) for ms, t in lines if t]
+    lines.sort(key=lambda x: x[0])
+    out = []
+    for i, (start, text) in enumerate(lines):
+        end = lines[i + 1][0] if i + 1 < len(lines) else start + 8000
+        out.append({'startTimeMs': start, 'endTimeMs': end, 'text': text})
+    return out
+
+
+def get_timed_lyrics(artist, title):
+    """Letras sincronizadas vía LRCLIB (LRC). None si no hay."""
+    if not title:
+        return None
+    clean_artist = re.sub(r'\s*[\[(].*$', '', artist or '').strip()
+    clean_title = re.sub(r'\s*[\[(].*$', '', title or '').strip()
+    q = f'{clean_artist} {clean_title}'.strip()
+
+    def fn():
+        try:
+            req = urllib.request.Request(
+                f'https://lrclib.net/api/search?q={urllib.parse.quote(q)}',
+                headers={'User-Agent': 'PlayTube/2.0 (JoFi Music)'})
+            with urllib.request.urlopen(req, timeout=15) as r:
+                items = json.loads(r.read().decode('utf-8'))
+        except Exception as e:
+            log(f'lrclib error: {e}')
+            return None
+        if not isinstance(items, list):
+            return None
+        for it in items:
+            if it.get('instrumental') or not it.get('syncedLyrics'):
+                continue
+            ln = parse_lrc(it.get('syncedLyrics'))
+            if ln:
+                return {'source': 'lrclib', 'lines': ln, 'plain': it.get('plainLyrics') or ''}
+        # sin synced → que no se use como timed
+        return None
+    return cached('lyrics_timed', f'lrc:{q.lower()}', fn)
+
+
 def write_error_file(entry):
     with _db_lock:
         with open(LOG_DIR / 'error.log', 'a', encoding='utf-8') as f:
@@ -324,6 +382,18 @@ class Handler(BaseHTTPRequestHandler):
                     send_json(self, {'ok': True, 'lyrics': text})
                 else:
                     send_json(self, {'ok': False, 'error': 'sin letras'}, 404)
+                return
+            if path == '/api/lyrics/timed':
+                artist = (q.get('artist') or [''])[0]
+                title = (q.get('title') or [''])[0]
+                if not title:
+                    send_json(self, {'ok': False, 'error': 'sin titulo'}, 400)
+                    return
+                data = get_timed_lyrics(artist, title)
+                if data and data.get('lines'):
+                    send_json(self, {'ok': True, **data})
+                else:
+                    send_json(self, {'ok': False, 'error': 'sin letras sincronizadas'}, 404)
                 return
             if path == '/api/audio':
                 u = (q.get('u') or [''])[0]

@@ -35,6 +35,17 @@ export async function backendLyrics(id) {
   }
 }
 
+export async function timedLyrics(song) {
+  try {
+    const d = await request(
+      `/api/lyrics/timed?artist=${encodeURIComponent(song.artist || '')}&title=${encodeURIComponent(song.title || '')}`
+    )
+    return d.ok && d.lines ? d : null
+  } catch {
+    return null
+  }
+}
+
 export async function ovhLyrics(artist, title) {
   try {
     const res = await fetch(

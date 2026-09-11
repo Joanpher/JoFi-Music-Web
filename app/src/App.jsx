@@ -6,17 +6,25 @@ import LibraryScreen from './ui/LibraryScreen'
 import MiniPlayer from './ui/MiniPlayer'
 import BottomNav from './ui/BottomNav'
 import PlayerScreen from './ui/PlayerScreen'
+import LyricsOverlay from './ui/LyricsOverlay'
 import ScreenLoader from './ui/ScreenLoader'
 import Toasts from './ui/Toasts'
 import Dialog from './ui/Dialog'
+import useMediaQuery from './hooks/useMediaQuery'
+import DesktopApp from './ui/desktop/DesktopApp'
+
+const DESKTOP_QUERY = '(hover: hover) and (pointer: fine) and (min-width: 1024px)'
 
 function Screens() {
-  const { state, actions } = usePlayer()
+  const { state, actions, restored } = usePlayer()
+  const desktop = useMediaQuery(DESKTOP_QUERY)
 
   useEffect(() => {
-    actions.loadCharts('do')
+    if (!restored) actions.loadCharts('do')
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [])
+
+  if (desktop) return <DesktopApp />
 
   const Tab = state.tab === 'inicio' ? HomeScreen : state.tab === 'buscar' ? SearchScreen : LibraryScreen
 
@@ -28,6 +36,7 @@ function Screens() {
       <MiniPlayer />
       <BottomNav />
       {state.screen === 'player' && <PlayerScreen />}
+      {state.lyrics && <LyricsOverlay />}
       <ScreenLoader />
       <Toasts />
       <Dialog />

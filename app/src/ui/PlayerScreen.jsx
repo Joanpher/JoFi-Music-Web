@@ -128,61 +128,63 @@ export default function PlayerScreen() {
           )}
         </div>
 
-        <div className="np-track">
-          <div className="np-titles">
-            <h2 title={song.title}>{song.title}</h2>
-            <p title={song.artist}>{song.artist}</p>
+        <div className="np-right">
+          <div className="np-track">
+            <div className="np-titles">
+              <h2 title={song.title}>{song.title}</h2>
+              <p title={song.artist}>{song.artist}</p>
+            </div>
+            <button
+              key={liked ? 'l1' : 'l0'}
+              className={`np-like ${liked ? 'liked' : ''}`}
+              aria-label={liked ? 'Quitar de favoritos' : 'Guardar en favoritos'}
+              onClick={(e) => {
+                e.stopPropagation()
+                const added = toggleLike(song)
+                actions.toast(added ? 'Guardada en favoritas' : 'Eliminada de favoritas')
+              }}
+            >
+              {liked ? <IconHeartFill width={22} height={22} /> : <IconHeart width={22} height={22} />}
+            </button>
           </div>
-          <button
-            key={liked ? 'l1' : 'l0'}
-            className={`np-like ${liked ? 'liked' : ''}`}
-            aria-label={liked ? 'Quitar de favoritos' : 'Guardar en favoritos'}
-            onClick={(e) => {
-              e.stopPropagation()
-              const added = toggleLike(song)
-              actions.toast(added ? 'Guardada en favoritas' : 'Eliminada de favoritas')
-            }}
-          >
-            {liked ? <IconHeartFill width={22} height={22} /> : <IconHeart width={22} height={22} />}
-          </button>
-        </div>
 
-        <div className={`np-progress ${drag ? 'dragging' : ''}`} onPointerDown={onPointerDown} ref={trackRef}>
-          <div className="np-bar"><div className="np-fill" style={{ width: `${pct}%`, transition: drag ? 'none' : undefined }} /></div>
-          <div className="np-thumb" style={{ left: `calc(${pct}% - 5px)`, transition: drag ? 'none' : undefined }} />
-        </div>
-        <div className="np-times">
-          <span>{formatDuration(tick.current)}</span>
-          <span>−{formatDuration(Math.max(0, dur - tick.current))}</span>
-        </div>
+          <div className={`np-progress ${drag ? 'dragging' : ''}`} onPointerDown={onPointerDown} ref={trackRef}>
+            <div className="np-bar"><div className="np-fill" style={{ width: `${pct}%`, transition: drag ? 'none' : undefined }} /></div>
+            <div className="np-thumb" style={{ left: `calc(${pct}% - 5px)`, transition: drag ? 'none' : undefined }} />
+          </div>
+          <div className="np-times">
+            <span>{formatDuration(tick.current)}</span>
+            <span>−{formatDuration(Math.max(0, dur - tick.current))}</span>
+          </div>
 
-        <div className="np-controls">
-          <button
-            className={`np-tbtn ${state.shuffle ? 'on' : ''}`}
-            onClick={c.toggleShuffle}
-            aria-label="Aleatorio"
-            title="Aleatorio"
-          >
-            <IconShuffle width={21} height={21} />
-          </button>
-          <button className="np-nav" onClick={c.prev} aria-label="Anterior" title="Anterior">
-            <IconPrev width={30} height={30} />
-          </button>
-          <button className="np-play" onClick={c.togglePlay} aria-label={state.playing ? 'Pausar' : 'Reproducir'}>
-            {state.playing ? <IconPause width={27} height={27} /> : <IconPlay width={27} height={27} />}
-          </button>
-          <button className="np-nav" onClick={c.next} aria-label="Siguiente" title="Siguiente">
-            <IconNext width={30} height={30} />
-          </button>
-          <button
-            className={`np-tbtn ${state.repeat !== 'off' ? 'on' : ''}`}
-            onClick={c.toggleRepeat}
-            aria-label="Repetir"
-            title={`Repetir: ${state.repeat === 'one' ? 'una canción' : state.repeat === 'all' ? 'toda la lista' : 'desactivado'}`}
-          >
-            <IconRepeat width={21} height={21} />
-            {state.repeat === 'one' && <span className="np-num">1</span>}
-          </button>
+          <div className="np-controls">
+            <button
+              className={`np-tbtn ${state.shuffle ? 'on' : ''}`}
+              onClick={c.toggleShuffle}
+              aria-label="Aleatorio"
+              title="Aleatorio"
+            >
+              <IconShuffle width={21} height={21} />
+            </button>
+            <button className="np-nav" onClick={c.prev} aria-label="Anterior" title="Anterior">
+              <IconPrev width={30} height={30} />
+            </button>
+            <button className="np-play" onClick={c.togglePlay} aria-label={state.playing ? 'Pausar' : 'Reproducir'}>
+              {state.playing ? <IconPause width={27} height={27} /> : <IconPlay width={27} height={27} />}
+            </button>
+            <button className="np-nav" onClick={c.next} aria-label="Siguiente" title="Siguiente">
+              <IconNext width={30} height={30} />
+            </button>
+            <button
+              className={`np-tbtn ${state.repeat !== 'off' ? 'on' : ''}`}
+              onClick={c.toggleRepeat}
+              aria-label="Repetir"
+              title={`Repetir: ${state.repeat === 'one' ? 'una canción' : state.repeat === 'all' ? 'toda la lista' : 'desactivado'}`}
+            >
+              <IconRepeat width={21} height={21} />
+              {state.repeat === 'one' && <span className="np-num">1</span>}
+            </button>
+          </div>
         </div>
 
         <div className="np-bottom">

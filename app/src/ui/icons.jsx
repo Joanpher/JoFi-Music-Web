@@ -101,3 +101,21 @@ export const IconGlobe = (p) => (
 export const IconTrophy = (p) => (
   <svg {...S(p)}><path d="M6 9a6 6 0 0 0 12 0V3H6v6z" /><path d="M6 3h12" /><path d="M8 21h8" /><path d="M12 17v4" /><path d="M8 3v2h8V3" /></svg>
 )
+export const IconArrowRight = (p) => (
+  <svg {...S(p)}><path d="M5 12h14" /><path d="m12 5 7 7-7 7" /></svg>
+)
+export const IconPlus = (p) => (
+  <svg {...S(p)}><path d="M12 5v14" /><path d="M5 12h14" /></svg>
+)
+export const IconMaximize = (p) => (
+  <svg {...S(p)}><path d="M8 3H5a2 2 0 0 0-2 2v3" /><path d="M16 3h3a2 2 0 0 1 2 2v3" /><path d="M8 21H5a2 2 0 0 1-2-2v-3" /><path d="M16 21h3a2 2 0 0 0 2-2v-3" /></svg>
+)
+export const IconUser = (p) => (
+  <svg {...S(p)}><circle cx="12" cy="8" r="4.2" /><path d="M4 21c1.2-3.6 4.2-5.4 8-5.4s6.8 1.8 8 5.4" /></svg>
+)
+export const IconDownload = (p) => (
+  <svg {...S(p)}><path d="M12 3v12" /><path d="m7 10 5 5 5-5" /><path d="M4 17v2a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2v-2" /></svg>
+)
+export const IconClose = (p) => (
+  <svg {...S(p)}><path d="M18 6 6 18" /><path d="m6 6 12 12" /></svg>
+)
