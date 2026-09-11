@@ -173,11 +173,22 @@ def search_music(q):
 
 
 _ydl_opts = {
-    'format': 'bestaudio[ext=m4a]/bestaudio/best',
+    # El cliente web requiere cada vez más comprobaciones (PO Token/EJS) y
+    # suele ser bloqueado desde IPs de centros de datos como las de Vercel.
+    # android_vr mantiene formatos HTTPS reproducibles sin esos tokens.
+    'format': 'bestaudio[ext=m4a]/18/bestaudio/best',
     'quiet': True,
     'no_warnings': True,
     'skip_download': True,
     'noplaylist': True,
+    'source_address': '0.0.0.0',
+    'socket_timeout': 20,
+    'retries': 2,
+    'extractor_args': {
+        'youtube': {
+            'player_client': ['android_vr'],
+        },
+    },
 }
 
 

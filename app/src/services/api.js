@@ -4,8 +4,9 @@ import { LYRICS_API } from '../lib/constants'
 
 async function request(url, opts) {
   const res = await fetch(url, opts)
-  if (!res.ok) throw new Error(`HTTP ${res.status}`)
-  return res.json()
+  const data = await res.json().catch(() => null)
+  if (!res.ok) throw new Error((data && data.error) || `HTTP ${res.status}`)
+  return data
 }
 
 export async function getCharts(cc) {
