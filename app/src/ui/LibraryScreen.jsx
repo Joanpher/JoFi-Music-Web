@@ -1,6 +1,6 @@
 import { usePlayer } from '../state/PlayerContext'
 import { COUNTRIES } from '../lib/constants'
-import { formatDuration, thumbFor } from '../lib/format'
+import { artworkFallback, formatDuration, thumbFor } from '../lib/format'
 import { IconGlobe, IconHeartFill, IconMic, IconMusic, IconShuffle } from './icons'
 
 function FavCard({ song, index, list }) {
@@ -28,7 +28,7 @@ function FavCard({ song, index, list }) {
     >
       <span className="card-art">
         {song.thumb ? (
-          <img src={thumbFor(song.thumb, 256)} alt="" loading="lazy" decoding="async" />
+          <img src={thumbFor(song.thumb, 256)} alt="" loading="lazy" decoding="async" onError={artworkFallback} />
         ) : (
           <span className="card-art-empty"><IconMusic width={22} height={22} /></span>
         )}

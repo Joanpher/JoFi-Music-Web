@@ -1,5 +1,5 @@
 import { usePlayer } from '../../state/PlayerContext'
-import { formatDuration, thumbFor } from '../../lib/format'
+import { artworkFallback, formatDuration, thumbFor } from '../../lib/format'
 import { IconMusic, IconPlay, IconHeart, IconHeartFill } from '../icons'
 
 export default function TrackTable({ songs, title }) {
@@ -41,7 +41,7 @@ export default function TrackTable({ songs, title }) {
             </span>
             <span className="d-td title">
               {s.thumb ? (
-                <img className="d-tr-art" src={thumbFor(s.thumb, 128)} alt="" loading="lazy" decoding="async" />
+                <img className="d-tr-art" src={thumbFor(s.thumb, 128)} alt="" loading="lazy" decoding="async" onError={artworkFallback} />
               ) : (
                 <span className="d-tr-art d-tr-art-empty"><IconMusic width={18} height={18} /></span>
               )}

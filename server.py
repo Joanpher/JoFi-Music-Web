@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 # -*- coding: utf-8 -*-
-"""PlayTube · Servidor en capas.
+"""JoFi Music · Servidor en capas.
 
 - API:  /api/charts · /api/search · /api/song · /api/lyrics · /api/audio (proxy Range)
 - Logs: /api/log  →  logs/error.log  (los clientes envían errores aquí en producción)
@@ -29,7 +29,7 @@ LOG_DIR = ROOT / 'logs'
 PORT = int(ROOT.joinpath('.port').read_text().strip()) if ROOT.joinpath('.port').exists() else 8000
 DB_PATH = ROOT / 'playtube_cache.db'
 
-TTL = {'charts': 3600, 'search': 3600, 'url': 3 * 3600, 'lyrics': 24 * 3600, 'lyrics_timed': 24 * 3600}
+TTL = {'charts': 3600, 'search': 3600, 'url': 5 * 3600, 'lyrics': 24 * 3600, 'lyrics_timed': 24 * 3600}
 
 _mem = {}
 _lock = threading.Lock()
@@ -78,6 +78,14 @@ def cache_set(kind, key, ttl, value):
     with _db_lock:
         _conn.execute('INSERT OR REPLACE INTO cache(kind, key, dt, text) VALUES(?,?,?,?)',
                       (kind, key, exp, text))
+        _conn.commit()
+
+
+def cache_del(kind, key):
+    with _lock:
+        _mem.pop((kind, key), None)
+    with _db_lock:
+        _conn.execute('DELETE FROM cache WHERE kind=? AND key=?', (kind, key))
         _conn.commit()
 
 
@@ -170,7 +178,7 @@ _ydl_opts = {
 }
 
 
-def stream_url(video_id):
+def stream_url(video_id, refresh=False):
     def fn():
         with _lock:
             with yt_dlp.YoutubeDL(_ydl_opts) as ydl:
@@ -179,6 +187,8 @@ def stream_url(video_id):
             if not url:
                 raise RuntimeError('yt-dlp no devolvió url de audio')
             return url
+    if refresh:
+        cache_del('url', f'url:{video_id}')
     try:
         return cached('url', f'url:{video_id}', fn)
     except Exception as e:
@@ -244,7 +254,7 @@ def get_timed_lyrics(artist, title):
         try:
             req = urllib.request.Request(
                 f'https://lrclib.net/api/search?q={urllib.parse.quote(q)}',
-                headers={'User-Agent': 'PlayTube/2.0 (JoFi Music)'})
+                headers={'User-Agent': 'JoFiMusic/2.0'})
             with urllib.request.urlopen(req, timeout=15) as r:
                 items = json.loads(r.read().decode('utf-8'))
         except Exception as e:
@@ -298,7 +308,7 @@ MIME = {
 
 class Handler(BaseHTTPRequestHandler):
     protocol_version = 'HTTP/1.1'
-    server_version = 'PlayTubeServer/2.0'
+    server_version = 'JoFiMusicServer/2.0'
 
     def log_message(self, *args):
         pass
@@ -369,7 +379,8 @@ class Handler(BaseHTTPRequestHandler):
                 if not vid:
                     send_json(self, {'ok': False, 'error': 'sin id'}, 400)
                     return
-                url = stream_url(vid)
+                refresh = (q.get('refresh') or ['0'])[0] == '1'
+                url = stream_url(vid, refresh=refresh)
                 send_json(self, {'ok': True, 'videoId': vid, 'url': url})
                 return
             if path == '/api/lyrics':
@@ -401,6 +412,18 @@ class Handler(BaseHTTPRequestHandler):
                     send_json(self, {'ok': False, 'error': 'url inválida'}, 400)
                     return
                 self._proxy_audio(u)
+                return
+            if path == '/api/image':
+                u = (q.get('u') or [''])[0]
+                parsed_image = urllib.parse.urlparse(u)
+                host = (parsed_image.hostname or '').lower()
+                allowed = any(host == domain or host.endswith(f'.{domain}') for domain in (
+                    'googleusercontent.com', 'ggpht.com', 'ytimg.com'
+                ))
+                if parsed_image.scheme != 'https' or not allowed:
+                    send_json(self, {'ok': False, 'error': 'imagen inválida'}, 400)
+                    return
+                self._proxy_image(u)
                 return
         except Exception as e:
             log(f'API error en {path}: {e}')
@@ -464,6 +487,35 @@ class Handler(BaseHTTPRequestHandler):
         finally:
             upstream.close()
 
+    def _proxy_image(self, url):
+        req = urllib.request.Request(url, headers={
+            'User-Agent': 'Mozilla/5.0',
+            'Referer': 'https://music.youtube.com/',
+            'Accept': 'image/avif,image/webp,image/apng,image/svg+xml,image/*,*/*;q=0.8',
+        })
+        try:
+            with urllib.request.urlopen(req, timeout=20) as upstream:
+                content_type = upstream.headers.get('Content-Type', 'image/jpeg')
+                if not content_type.lower().startswith('image/'):
+                    raise RuntimeError('el proveedor no devolvió una imagen')
+                data = upstream.read(8 * 1024 * 1024 + 1)
+                if len(data) > 8 * 1024 * 1024:
+                    raise RuntimeError('imagen demasiado grande')
+        except Exception as e:
+            log(f'image proxy error: {e}')
+            send_json(self, {'ok': False, 'error': 'no se pudo cargar la portada'}, 502)
+            return
+
+        self.send_response(200)
+        self.send_header('Content-Type', content_type)
+        self.send_header('Content-Length', str(len(data)))
+        self.send_header('Cache-Control', 'public, max-age=86400')
+        self.end_headers()
+        try:
+            self.wfile.write(data)
+        except (BrokenPipeError, ConnectionResetError):
+            pass
+
 
 def lan_ips():
     ips = []
@@ -488,7 +540,7 @@ if __name__ == '__main__':
     srv = ThreadingHTTPServer(('0.0.0.0', PORT), Handler)
     srv.daemon_threads = True
     print('=' * 58)
-    print('  PlayTube v2 · backends ytmusicapi + yt-dlp · caché SQLite')
+    print('  JoFi Music v2 · backends ytmusicapi + yt-dlp · caché SQLite')
     print(f'  Este PC:      http://localhost:{PORT}')
     for ip in lan_ips():
         print(f'  Tu teléfono:  http://{ip}:{PORT}   (misma red Wi-Fi)')

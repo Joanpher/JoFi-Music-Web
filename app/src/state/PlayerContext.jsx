@@ -91,6 +91,8 @@ export function PlayerProvider({ children }) {
   const audioRef = useRef(null)
   const streamCache = useRef(new Map())
   const proxyUsed = useRef(new Set())
+  const refreshUsed = useRef(new Set())
+  const prefetching = useRef(new Map())
   const positionMap = useRef(new Map())
   const stateRef = useRef(state)
   stateRef.current = state
@@ -182,6 +184,7 @@ export function PlayerProvider({ children }) {
   useEffect(() => {
     const a = new Audio()
     a.preload = 'metadata'
+    a.setAttribute('playsinline', '')
     a.volume = stateRef.current.volume / 100
     audioRef.current = a
 
@@ -461,13 +464,32 @@ export function PlayerProvider({ children }) {
     }
     const onError = () => {
       const s = currentSong()
-      if (s && s.ytmId && streamCache.current.has(s.ytmId)) {
+      if (s && s.ytmId) {
         const u = streamCache.current.get(s.ytmId)
-        if (u.startsWith('https://') && !proxyUsed.current.has(s.ytmId)) {
+        if (u && u.startsWith('https://') && !proxyUsed.current.has(s.ytmId)) {
           proxyUsed.current.add(s.ytmId)
           logger.info('stream directo falló → proxy local')
           a.src = `/api/audio?u=${encodeURIComponent(u)}`
           a.play().catch(() => {})
+          return
+        }
+        if (!refreshUsed.current.has(s.ytmId)) {
+          refreshUsed.current.add(s.ytmId)
+          logger.info('stream falló → re-resolviendo')
+          dispatch({ type: 'BUSY', text: 'Reintentando la canción…' })
+          api.resolveSong(s.ytmId, { refresh: true })
+            .then((d) => {
+              if (!d || !d.url) throw new Error('sin url')
+              streamCache.current.set(s.ytmId, d.url)
+              proxyUsed.current.delete(s.ytmId)
+              a.src = d.url
+              a.play().catch(() => dispatch({ type: 'SET_PLAYING', v: false }))
+            })
+            .catch(() => {
+              logger.error(`error reproduciendo "${s.title}"`)
+              toast(`No se pudo reproducir: ${s.title}`, { error: true })
+            })
+            .finally(() => dispatch({ type: 'BUSY', text: null }))
           return
         }
       }
@@ -490,6 +512,43 @@ export function PlayerProvider({ children }) {
     dispatch({ type: 'SET_PLAYING', v: false })
     playIndex(index, { screen: true }, list)
   }, [playIndex])
+
+  /* ---------- precarga de streams (que el paso a la siguiente canción sea instantáneo) ---------- */
+  const prefetchStream = useCallback(async (song) => {
+    if (!song || !song.ytmId) return
+    if (streamCache.current.has(song.ytmId)) return
+    if (prefetching.current.has(song.ytmId)) return
+    prefetching.current.set(song.ytmId, true)
+    try {
+      const d = await api.resolveSong(song.ytmId)
+      if (d && d.url) streamCache.current.set(song.ytmId, d.url)
+    } catch (e) {
+      logger.info(`prefetch fallido: ${song.ytmId}`)
+    } finally {
+      prefetching.current.delete(song.ytmId)
+    }
+  }, [])
+
+  /* al cargar una lista → deja lista la primera y segunda canción */
+  useEffect(() => {
+    const { queue } = stateRef.current
+    if (!queue || !queue.length) return
+    prefetchStream(queue[0])
+    if (queue[1]) prefetchStream(queue[1])
+  }, [state.queue, prefetchStream])
+
+  /* al cambiar de canción → siguiente y anterior ya resueltas */
+  useEffect(() => {
+    const { queue, current, shuffle } = stateRef.current
+    if (current < 0 || !queue.length || !queue[current]) return
+    const cur = queue[current]
+    const next = shuffle
+      ? queue[Math.floor(Math.random() * queue.length)]
+      : queue[(current + 1) % queue.length]
+    const prev = queue[(current - 1 + queue.length) % queue.length]
+    if (next && next.ytmId !== cur.ytmId) prefetchStream(next)
+    if (prev && prev.ytmId !== cur.ytmId) prefetchStream(prev)
+  }, [state.current, state.shuffle, prefetchStream])
 
   /* ---------- MediaSession ---------- */
   useEffect(() => {

@@ -20,8 +20,9 @@ export async function searchSongs(q) {
   return d
 }
 
-export async function resolveSong(id) {
-  const d = await request(`/api/song?id=${encodeURIComponent(id)}`)
+export async function resolveSong(id, { refresh = false } = {}) {
+  const qs = `/api/song?id=${encodeURIComponent(id)}${refresh ? '&refresh=1' : ''}`
+  const d = await request(qs)
   if (!d || d.ok === false) throw new Error((d && d.error) || 'Sin url de audio')
   return d
 }

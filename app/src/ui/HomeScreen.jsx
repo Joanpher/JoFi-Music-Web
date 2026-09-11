@@ -1,9 +1,9 @@
 import { useEffect, useRef, useState } from 'react'
 import { usePlayer } from '../state/PlayerContext'
 import * as api from '../services/api'
-import { thumbFor } from '../lib/format'
+import { artworkFallback, thumbFor } from '../lib/format'
 import { GENRES, countryInfo } from '../lib/constants'
-import { IconBell, IconClock, IconGear, IconHeartFill, IconMoon, IconFlame, IconMusic, IconVinyl, IconZap } from './icons'
+import { IconClock, IconGear, IconHeartFill, IconMoon, IconFlame, IconMusic, IconVinyl, IconZap } from './icons'
 import GenreIcon from './GenreIcon'
 
 const QUICK = [
@@ -35,7 +35,7 @@ function RailCard({ songs, index, playing, song, onPlay }) {
     <button className="rail-card" onClick={() => onPlay(index)} aria-label={`Reproducir ${song.title}`}>
       <span className={`rail-art ${playing ? 'playing' : ''}`}>
         {song.thumb ? (
-          <img src={thumbFor(song.thumb, 150)} alt="" loading="lazy" decoding="async" />
+          <img src={thumbFor(song.thumb, 150)} alt="" loading="lazy" decoding="async" onError={artworkFallback} />
         ) : (
           <span className="rail-empty"><IconMusic width={40} height={40} /></span>
         )}
@@ -91,7 +91,7 @@ export default function HomeScreen() {
       `Aleatorio: ${state.shuffle ? 'ON' : 'OFF'}`,
       `Repetir: ${state.repeat === 'off' ? 'sin repetición' : state.repeat === 'all' ? 'repite la lista' : 'repite una'}`,
       `Volumen: ${state.muted ? 'silenciado' : state.volume + '%'}`,
-      'PlayTube - música completa v2'
+      'JoFi Music v2'
     ].join('\n'), [{ label: 'Cerrar' }])
   }
 
@@ -105,14 +105,14 @@ export default function HomeScreen() {
       <div className="home-topbg" />
 
       <header className="home-head">
-        <div className="hh-text">
-          <h1>{greeting()}</h1>
-          <span><span className="cc-badge">{state.cc.toUpperCase()}</span>{cc.name}</span>
+        <div className="hh-brand">
+          <img className="hh-logo" src="/logo-jofi.png" alt="JoFi Music" draggable="false" />
+          <div className="hh-text">
+            <h1>{greeting()}</h1>
+            <span><span className="cc-badge">{state.cc.toUpperCase()}</span>{cc.name}</span>
+          </div>
         </div>
         <div className="hh-actions">
-          <button className="hh-btn" onClick={actions.randomList} aria-label="Sorpresa del día" title="Sorpresa del día">
-            <IconBell width={18} height={18} />
-          </button>
           <button className="hh-btn" onClick={actions.openFavorites} aria-label="Tus favoritas" title="Tus favoritas">
             <IconClock width={18} height={18} />
           </button>

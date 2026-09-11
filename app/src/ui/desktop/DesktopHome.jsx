@@ -3,7 +3,7 @@ import { usePlayer } from '../../state/PlayerContext'
 import { QUICK, SECTIONS } from './data'
 import * as api from '../../services/api'
 import { countryInfo, GENRES } from '../../lib/constants'
-import { thumbFor } from '../../lib/format'
+import { artworkFallback, thumbFor } from '../../lib/format'
 import GenreIcon from '../GenreIcon'
 import { IconMusic, IconPlay } from '../icons'
 
@@ -19,7 +19,7 @@ function Card({ song, index, playing, onPlay }) {
     <button className={`d-card ${playing ? 'playing' : ''}`} onClick={() => onPlay(index)}>
       <span className="d-card-art">
         {song.thumb ? (
-          <img src={thumbFor(song.thumb, 300)} alt="" loading="lazy" decoding="async" />
+          <img src={thumbFor(song.thumb, 300)} alt="" loading="lazy" decoding="async" onError={artworkFallback} />
         ) : (
           <span className="d-card-empty"><IconMusic width={34} height={34} /></span>
         )}

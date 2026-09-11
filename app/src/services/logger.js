@@ -27,18 +27,18 @@ function sendToServer(level, msg, meta) {
 
 export const logger = {
   info(msg) {
-    if (isDev) console.info('[PlayTube]', msg)
+    if (isDev) console.info('[JoFi Music]', msg)
   },
   warn(msg) {
     if (isDev) {
-      console.warn('[PlayTube]', msg)
+      console.warn('[JoFi Music]', msg)
     } else {
       sendToServer('warn', msg)
     }
   },
   error(msg, meta) {
     if (isDev) {
-      console.error('[PlayTube]', msg, meta || '')
+      console.error('[JoFi Music]', msg, meta || '')
     } else {
       sendToServer('error', msg, meta)
     }

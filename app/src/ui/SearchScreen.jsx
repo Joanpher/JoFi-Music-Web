@@ -1,7 +1,7 @@
 import { useState } from 'react'
 import { usePlayer } from '../state/PlayerContext'
 import { GENRES, countryInfo } from '../lib/constants'
-import { formatDuration, thumbFor } from '../lib/format'
+import { artworkFallback, formatDuration, thumbFor } from '../lib/format'
 import { IconMic, IconMusic, IconSearch, IconShuffle, IconTrophy } from './icons'
 import GenreIcon from './GenreIcon'
 
@@ -31,7 +31,7 @@ function SongCard({ song, index }) {
       <span className="card-idx">{playing ? '♪' : active ? '−' : index + 1}</span>
       <span className="card-art">
         {song.thumb ? (
-          <img src={thumbFor(song.thumb, 256)} alt="" loading="lazy" decoding="async" />
+          <img src={thumbFor(song.thumb, 256)} alt="" loading="lazy" decoding="async" onError={artworkFallback} />
         ) : (
           <span className="card-art-empty"><IconMusic width={22} height={22} /></span>
         )}

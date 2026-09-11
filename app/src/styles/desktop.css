@@ -51,6 +51,7 @@
   }
 
   .d-logo { display: flex; align-items: center; gap: 10px; padding: 2px 8px 14px; }
+  .d-logo img { display: block; border-radius: 9px; box-shadow: 0 5px 16px rgba(0, 109, 132, .2); }
   .d-logo-text { font-size: 18px; font-weight: 700; color: #fff; letter-spacing: -0.2px; }
 
   .d-nav {
@@ -249,6 +250,7 @@
     backdrop-filter: blur(12px);
   }
   .d-header-left, .d-header-right { display: flex; align-items: center; gap: 8px; }
+  .d-header-right { margin-left: auto; }
   .d-round {
     width: 32px; height: 32px;
     border-radius: 50%;
@@ -836,7 +838,12 @@
   .d-now-art:hover { opacity: 0.85; }
   .d-now-art img { width: 100%; height: 100%; object-fit: cover; display: block; }
   .d-now-art-empty { color: var(--dtext3); }
-  .d-now-meta { display: flex; flex-direction: column; gap: 3px; min-width: 0; }
+  .d-now-meta {
+    display: flex; flex-direction: column; align-items: flex-start; gap: 3px;
+    min-width: 0; overflow: hidden;
+    padding: 0; border: 0; background: none;
+    text-align: left; cursor: pointer;
+  }
   .d-now-title {
     font-size: 13px; font-weight: 500; color: #fff;
     white-space: nowrap; overflow: hidden; text-overflow: ellipsis;

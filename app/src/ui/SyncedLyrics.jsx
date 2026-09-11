@@ -21,6 +21,7 @@ export default function SyncedLyrics({ lines, timed, getPosition, onLineClick })
   const lineElsRef = useRef([])
   const topsRef = useRef([])
   const activeIdxRef = useRef(-1)
+  const lastFollowIdxRef = useRef(-1)
   const followRef = useRef(true)
   const baseRef = useRef(0)
   const offsetRef = useRef(0)
@@ -80,16 +81,33 @@ export default function SyncedLyrics({ lines, timed, getPosition, onLineClick })
       if (idx !== activeIdxRef.current) {
         activeIdxRef.current = idx
         setActiveIndex(idx)
-        if (followRef.current && idx >= 0) {
-          const vp = viewportRef.current
-          const tops = topsRef.current
-          if (vp && tops[idx] != null) {
-            baseRef.current = -(tops[idx] - vp.clientHeight * 0.4)
-            offsetRef.current = 0
-            paint()
+      }
+
+      /* la línea que suena SIEMPRE queda visible: se re-centra en vivo
+         si cambió el índice o si se salió de la banda segura del visor */
+      if (followRef.current && idx >= 0) {
+        const vp = viewportRef.current
+        const lineEl = lineElsRef.current[idx]
+        if (vp && lineEl) {
+          const vpr = vp.getBoundingClientRect()
+          const lr = lineEl.getBoundingClientRect()
+          const top = lr.top - vpr.top
+          const bottom = lr.bottom - vpr.top
+          const lo = vpr.height * 0.18
+          const hi = vpr.height * 0.62
+          if (idx !== lastFollowIdxRef.current || top < lo || bottom > hi) {
+            measure()
+            const tops = topsRef.current
+            if (tops[idx] != null) {
+              baseRef.current = -(tops[idx] - vpr.height * 0.4)
+              offsetRef.current = 0
+              paint()
+            }
+            lastFollowIdxRef.current = idx
           }
         }
       }
+
       const line = idx >= 0 ? lines[idx] : null
       if (line && line.words && line.words.length) {
         const t = ms - (line.startTimeMs || 0)
@@ -102,7 +120,23 @@ export default function SyncedLyrics({ lines, timed, getPosition, onLineClick })
     }
     raf = requestAnimationFrame(loop)
     return () => cancelAnimationFrame(raf)
-  }, [lines, timed, getPosition, paint])
+  }, [lines, timed, getPosition, paint, measure])
+
+  /* re-centrar cuando las fuentes terminan de cargar (cambian las alturas) */
+  useEffect(() => {
+    if (!timed) return
+    const fix = () => {
+      measure()
+      if (followRef.current && activeIdxRef.current >= 0) scrollToActive(activeIdxRef.current)
+    }
+    if (document.fonts) {
+      document.fonts.ready.then(fix)
+      document.fonts.addEventListener('loadingdone', fix)
+    }
+    return () => {
+      if (document.fonts) document.fonts.removeEventListener('loadingdone', fix)
+    }
+  }, [timed, measure, scrollToActive])
 
   /* scroll manual → apagar auto-follow; no pelear con el usuario */
   useEffect(() => {

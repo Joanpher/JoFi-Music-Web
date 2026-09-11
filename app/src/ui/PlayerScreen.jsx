@@ -1,6 +1,6 @@
 import { useRef, useState } from 'react'
 import { usePlayer } from '../state/PlayerContext'
-import { formatDuration, thumbFor } from '../lib/format'
+import { artworkFallback, formatDuration, thumbFor } from '../lib/format'
 import useDominantColor from '../hooks/useDominantColor'
 import {
   IconChevronDown, IconDevice, IconDots, IconHeart, IconHeartFill,
@@ -78,7 +78,7 @@ export default function PlayerScreen() {
 
   const share = () => {
     if (!song) return
-    const text = `Escuchando "${song.title}" de ${song.artist} en PlayTube`
+    const text = `Escuchando "${song.title}" de ${song.artist} en JoFi Music`
     if (navigator.share) {
       navigator.share({ title: song.title, text }).catch(() => {})
     } else {
@@ -122,7 +122,7 @@ export default function PlayerScreen() {
 
         <div className="np-cover">
           {song.thumb ? (
-            <img src={thumbFor(song.thumb, 512)} alt="" draggable={false} decoding="async" />
+            <img src={thumbFor(song.thumb, 512)} alt="" draggable={false} decoding="async" onError={artworkFallback} />
           ) : (
             <span className="np-empty"><IconMusic width={64} height={64} /></span>
           )}

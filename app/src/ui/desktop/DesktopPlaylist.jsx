@@ -1,5 +1,5 @@
 import { usePlayer } from '../../state/PlayerContext'
-import { formatDuration, thumbFor } from '../../lib/format'
+import { artworkFallback, formatDuration, thumbFor } from '../../lib/format'
 import useDominantColor from '../../hooks/useDominantColor'
 import TrackTable from './TrackTable'
 import { IconHeart, IconHeartFill, IconMusic, IconPlay, IconDots } from '../icons'
@@ -29,7 +29,7 @@ export default function DesktopPlaylist() {
       <div className="d-pl-hero" style={{ background: gradient }}>
         <div className="d-pl-cover">
           {first && first.thumb ? (
-            <img src={thumbFor(first.thumb, 512)} alt="" loading="lazy" decoding="async" />
+            <img src={thumbFor(first.thumb, 512)} alt="" loading="lazy" decoding="async" onError={artworkFallback} />
           ) : (
             <span className="d-pl-cover-empty"><IconMusic width={56} height={56} /></span>
           )}

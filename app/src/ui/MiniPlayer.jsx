@@ -1,5 +1,5 @@
 import { usePlayer } from '../state/PlayerContext'
-import { thumbFor } from '../lib/format'
+import { artworkFallback, thumbFor } from '../lib/format'
 import { IconHeart, IconHeartFill, IconMusic, IconPause, IconPlay } from './icons'
 
 export default function MiniPlayer() {
@@ -18,7 +18,7 @@ export default function MiniPlayer() {
         aria-label="Abrir el reproductor"
       >
         {song.thumb ? (
-          <img src={thumbFor(song.thumb, 144)} alt="" loading="lazy" decoding="async" />
+          <img src={thumbFor(song.thumb, 144)} alt="" loading="lazy" decoding="async" onError={artworkFallback} />
         ) : (
           <span className="mp-empty"><IconMusic width={22} height={22} /></span>
         )}

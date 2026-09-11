@@ -1,8 +1,8 @@
 import { useState } from 'react'
 import { usePlayer } from '../../state/PlayerContext'
-import { formatDuration, thumbFor } from '../../lib/format'
+import { artworkFallback, formatDuration, thumbFor } from '../../lib/format'
 import {
-  IconClose, IconDevice, IconHeart, IconHeartFill, IconMic,
+  IconClose, IconHeart, IconHeartFill, IconMic,
   IconMute, IconMusic, IconNext, IconPause, IconPlay, IconPrev, IconQueue,
   IconRepeat, IconShuffle, IconVolume
 } from '../icons'
@@ -33,15 +33,15 @@ export default function DesktopPlayer() {
         <div className="d-now">
           <button className="d-now-art" onClick={() => setExpanded(true)} aria-label="Abrir vista ampliada">
             {song.thumb ? (
-              <img src={thumbFor(song.thumb, 256)} alt="" />
+              <img src={thumbFor(song.thumb, 256)} alt="" onError={artworkFallback} />
             ) : (
               <span className="d-now-art-empty"><IconMusic width={20} height={20} /></span>
             )}
           </button>
-          <div className="d-now-meta">
+          <button className="d-now-meta" onClick={() => setExpanded(true)} aria-label={`Abrir reproductor de ${song.title}`}>
             <span className="d-now-title" title={song.title}>{song.title}</span>
             <span className="d-now-artist" title={song.artist}>{song.artist}</span>
-          </div>
+          </button>
           <button className={`d-now-like ${liked ? 'liked' : ''}`} onClick={like} aria-label="Me gusta">
             {liked ? <IconHeartFill width={18} height={18} /> : <IconHeart width={18} height={18} />}
           </button>
@@ -88,12 +88,6 @@ export default function DesktopPlayer() {
           <button className="d-ctl icon" onClick={() => actions.openLyrics(song)} aria-label="Letras" title="Letras">
             <IconMic width={17} height={17} />
           </button>
-          <button className="d-ctl icon" onClick={() => actions.toast('Cola (demo)')} aria-label="Cola" title="Cola">
-            <IconQueue width={17} height={17} />
-          </button>
-          <button className="d-ctl icon" onClick={() => actions.toast('Este teléfono')} aria-label="Dispositivo" title="Dispositivo">
-            <IconDevice width={17} height={17} />
-          </button>
           <div className={`d-vol ${volDrag || state.muted ? 'active' : ''}`}>
             <button className="d-ctl icon" onClick={c.toggleMute} aria-label={state.muted ? 'Activar sonido' : 'Silenciar'}>
               {state.muted || state.volume === 0 ? <IconMute width={17} height={17} /> : <IconVolume width={17} height={17} />}
@@ -136,6 +130,11 @@ function NowPlayingModal({ song, onClose }) {
     actions.toast(added ? 'Guardada en favoritas' : 'Eliminada de favoritas')
   }
 
+  const openLyrics = () => {
+    onClose()
+    actions.openLyrics(song)
+  }
+
   const showQueue = () => {
     actions.showDialog(
       'En la cola',
@@ -155,7 +154,7 @@ function NowPlayingModal({ song, onClose }) {
 
         <div className="d-modal-cover">
           {song.thumb ? (
-            <img src={thumbFor(song.thumb, 640)} alt="" />
+            <img src={thumbFor(song.thumb, 640)} alt="" onError={artworkFallback} />
           ) : (
             <span className="d-modal-cover-empty"><IconMusic width={64} height={64} /></span>
           )}
@@ -170,7 +169,7 @@ function NowPlayingModal({ song, onClose }) {
             <button className={`d-modal-like ${liked ? 'liked' : ''}`} onClick={like} aria-label="Me gusta">
               {liked ? <IconHeartFill width={20} height={20} /> : <IconHeart width={20} height={20} />}
             </button>
-            <button className="d-modal-btn" onClick={() => actions.openLyrics(song)}>
+            <button className="d-modal-btn" onClick={openLyrics}>
               <IconMic width={17} height={17} /> Letras
             </button>
             <button className="d-modal-btn" onClick={showQueue}>

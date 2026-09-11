@@ -50,9 +50,9 @@ export function updateMediaSession(song, duration, playing, position = 0) {
   if (song) {
     guard(() => {
       ms.metadata = new MediaMetadata({
-        title: song.title || 'PlayTube',
+        title: song.title || 'JoFi Music',
         artist: song.artist || '',
-        album: song.album || 'PlayTube',
+        album: song.album || 'JoFi Music',
         artwork: song.thumb ? [{ src: song.thumb, sizes: '512x512' }] : []
       })
     })

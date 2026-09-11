@@ -8,12 +8,12 @@ export default defineConfig({
     react(),
     VitePWA({
       registerType: 'autoUpdate',
-      includeAssets: ['favicon.svg'],
+      includeAssets: ['logo-jofi.png'],
       manifest: {
-        name: 'PlayTube · Música completa',
-        short_name: 'PlayTube',
-        description: 'Reproductor de música completa desde YouTube Music, con letras y control desde notificaciones.',
-        theme_color: '#0e1017',
+        name: 'JoFi Music',
+        short_name: 'JoFi',
+        description: 'Tu música, letras y controles en un solo lugar.',
+        theme_color: '#075c70',
         background_color: '#0e1017',
         display: 'standalone',
         start_url: '/',
