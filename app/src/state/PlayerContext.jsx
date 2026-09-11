@@ -579,7 +579,9 @@ export function PlayerProvider({ children }) {
       if (!songs.length) toast('El top salió vacío', { error: true })
     } catch (e) {
       logger.error('no se pudo cargar el top', e)
-      showDialog('Error de conexión', 'No se pudo conectar con el servidor. ¿Corriste iniciar.bat?', [{ label: 'Entendido' }])
+      const local = ['localhost', '127.0.0.1'].includes(window.location.hostname)
+      const hint = local ? '¿Corriste iniciar.bat?' : 'Inténtalo nuevamente en unos segundos.'
+      showDialog('Error de conexión', `No se pudo conectar con el servicio de música. ${hint}`, [{ label: 'Entendido' }])
     } finally {
       dispatch({ type: 'BUSY', text: null })
     }

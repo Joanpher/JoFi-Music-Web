@@ -10,10 +10,12 @@
 """
 import gzip
 import json
+import os
 import re
 import sqlite3
 import threading
 import time
+import tempfile
 import urllib.parse
 import urllib.request
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
@@ -25,9 +27,10 @@ from ytmusicapi import YTMusic
 
 ROOT = Path(__file__).resolve().parent
 APP_DIST = ROOT / 'app' / 'dist'
-LOG_DIR = ROOT / 'logs'
+RUNTIME_DIR = Path(tempfile.gettempdir()) / 'jofi-music' if os.environ.get('VERCEL') else ROOT
+LOG_DIR = RUNTIME_DIR / 'logs'
 PORT = int(ROOT.joinpath('.port').read_text().strip()) if ROOT.joinpath('.port').exists() else 8000
-DB_PATH = ROOT / 'playtube_cache.db'
+DB_PATH = RUNTIME_DIR / 'playtube_cache.db'
 
 TTL = {'charts': 3600, 'search': 3600, 'url': 5 * 3600, 'lyrics': 24 * 3600, 'lyrics_timed': 24 * 3600}
 
@@ -37,7 +40,7 @@ _db_lock = threading.Lock()
 _conn = None
 _client = None
 
-LOG_DIR.mkdir(exist_ok=True)
+LOG_DIR.mkdir(parents=True, exist_ok=True)
 
 
 def log(msg):
