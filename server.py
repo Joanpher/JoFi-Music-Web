@@ -29,7 +29,8 @@ ROOT = Path(__file__).resolve().parent
 APP_DIST = ROOT / 'app' / 'dist'
 RUNTIME_DIR = Path(tempfile.gettempdir()) / 'jofi-music' if os.environ.get('VERCEL') else ROOT
 LOG_DIR = RUNTIME_DIR / 'logs'
-PORT = int(ROOT.joinpath('.port').read_text().strip()) if ROOT.joinpath('.port').exists() else 8000
+_port_env = os.environ.get('PORT') or os.environ.get('RAILWAY_PORT')
+PORT = int(_port_env) if _port_env else (int(ROOT.joinpath('.port').read_text().strip()) if ROOT.joinpath('.port').exists() else 8000)
 DB_PATH = RUNTIME_DIR / 'playtube_cache.db'
 
 TTL = {'charts': 3600, 'search': 3600, 'url': 5 * 3600, 'lyrics': 24 * 3600, 'lyrics_timed': 24 * 3600}
